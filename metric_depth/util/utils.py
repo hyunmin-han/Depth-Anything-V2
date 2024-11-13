@@ -11,6 +11,7 @@ from sklearn.cluster import KMeans
 from collections import Counter
 import matplotlib
 from sklearn.linear_model import LinearRegression
+import matplotlib.pyplot as plt
 
 
 logs = set()
@@ -115,6 +116,7 @@ def json_to_result(labelme_json, image_shape):
 
 def statistical_outlier_removal(points, k=50, std_multiplier=3.0):
     # k-최근접 이웃 구하기
+    
     kdtree = KDTree(points)
     distances, _ = kdtree.query(points, k + 1)  # 포인트 자신을 포함하기 때문에 k+1
 
@@ -364,7 +366,7 @@ def crop_by_tray_area(image, tray_mask):
 
     # 수정된 바운딩 박스를 사용하여 이미지 crop
     cropped_image = image[top:bottom+1, left:right+1]
-    return cropped_image, top, bottom, left, right
+    return cropped_image, [top, bottom, left, right]
 
 
 def get_tray_top_mask(depth, tray_mask):
@@ -521,16 +523,20 @@ def calc_plane_params(depth, tray_top_mask, scale_factor):
     points = np.column_stack((x_grid.ravel(), y_grid.ravel(), z_grid.ravel()))
     plane_pcd = o3d.geometry.PointCloud()
     plane_pcd.points = o3d.utility.Vector3dVector(points)
+    plane_pcd.paint_uniform_color([0, 1, 0])
 
     # 원본 포인트 클라우드도 추가 (optional)
     plane_area_points = np.column_stack((x, y, z))
     plane_area_pcd = o3d.geometry.PointCloud()
     plane_area_pcd.points = o3d.utility.Vector3dVector(plane_area_points)
+    plane_area_pcd.paint_uniform_color([0, 0, 1])
+
 
     not_plane_indices = tray_top_mask == 0
     not_plane_points = np.column_stack((x_coords[not_plane_indices], y_coords[not_plane_indices], depth[not_plane_indices] * scale_factor))
     not_plane_pcd = o3d.geometry.PointCloud()
     not_plane_pcd.points = o3d.utility.Vector3dVector(not_plane_points)
+    not_plane_pcd.paint_uniform_color([1, 0, 0])
 
 
 
@@ -538,6 +544,8 @@ def calc_plane_params(depth, tray_top_mask, scale_factor):
 
 
 def get_height_per_food(depth, food_mask, scale_factor, plane_params):
+
+    food_mask = cv2.erode(food_mask.astype(np.uint8), np.ones((5, 5), np.uint8), iterations=1)
 
     H, W = depth.shape  # pred는 H x W 크기의 numpy 배열이라고 가정
     x_coords, y_coords = np.meshgrid(np.arange(W), np.arange(H))  # x, y 좌표 생성
@@ -550,13 +558,10 @@ def get_height_per_food(depth, food_mask, scale_factor, plane_params):
 
     distances = calc_distances_to_plane(X, Y, Z, plane_params)
 
-
     food_points = np.column_stack((X, Y, Z))
     food_pcd = o3d.geometry.PointCloud()
     food_pcd.points = o3d.utility.Vector3dVector(food_points)
     food_pcd.paint_uniform_color([0.5, 0.5, 0.5])
-
-    
 
     return np.mean(distances), np.std(distances), food_pcd
 
@@ -580,8 +585,9 @@ def calc_distances_to_plane(X, Y, Z, plane_params):
     distances = a * X + b * Y - Z + d / np.sqrt(a**2 + b**2 + 1)
     return distances
 
-def get_food_masks(results, shape):
+def get_food_masks(results, shape, crop_loc):
 
+    top, bottom, left, right = crop_loc
     food_masks = {}
     food_indices = []
     for i in range(len(results['class_names'])):
@@ -591,16 +597,36 @@ def get_food_masks(results, shape):
             tray_mask = results['masks'][i]
         else :
             food_indices.append(i)
-            # zero = np.zeros_like(image, shape=image.shape[:2])
-            zero = np.zeros_like(shape)
-            food_masks[i] =  np.logical_or(zero, results['masks'][i])
+            zero = np.zeros(shape)
+            food_masks[i] =  np.logical_or(zero, results['masks'][i])[top:bottom+1, left:right+1]
     return food_masks, food_indices
 
-def calc_height_of_bottom_from_top(plane_params, tray_mask):
-    
-    
+def calc_height_of_bottom_from_top(depth, plane_params, tray_mask, food_masks, scale_factor):
 
-    pass
+    no_food_mask = np.logical_and(tray_mask, np.logical_not(np.logical_or.reduce(list(food_masks.values())))) 
+    
+    x_coords, y_coords = np.meshgrid(np.arange(depth.shape[1]), np.arange(depth.shape[0]))  
+
+    # tray_top_mask가 1인 위치에서 x, y, z 좌표 추출
+    mask_indices = no_food_mask == 1
+    X = x_coords[mask_indices]
+    Y = y_coords[mask_indices]
+    Z = depth[mask_indices] * scale_factor
+
+    inlier_points = statistical_outlier_removal(np.column_stack((X, Y, Z)))
+
+    distances = calc_distances_to_plane(inlier_points[:, 0], inlier_points[:, 1], inlier_points[:, 2], plane_params)
+
+    ## 평면에서 식판쪽 거리가 음값이기에 argmin으로 연산.
+    max_distance_index = np.argmin(distances)
+    max_x = inlier_points[max_distance_index, 0]
+    max_y = inlier_points[max_distance_index, 1]
+
+    depth_uint8 = (depth * 255).astype(np.uint8)
+    depth_colored = cv2.cvtColor(depth_uint8, cv2.COLOR_GRAY2BGR)
+    cv2.circle(depth_colored, (int(max_x), int(max_y)), 5, (0, 0, 255), -1)
+    cv2.imwrite('metric_depth/depth_with_dist_max_point.png', depth_colored)
+    return np.min(distances)
 
 def is_exist_foods_at_all_compart():
 
