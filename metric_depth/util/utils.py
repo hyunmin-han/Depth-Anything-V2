@@ -336,7 +336,6 @@ def transform_food_points(x, y, z, top, height, left, width,food_masks, translat
 
 def crop_by_tray_area(image, tray_mask):
 
-
     rows, cols = np.where(tray_mask == 1)
     top, bottom = rows.min(), rows.max()
     left, right = cols.min(), cols.max()
@@ -382,7 +381,7 @@ def get_tray_top_mask(depth, tray_mask):
 
     cmap = matplotlib.colormaps.get_cmap('Spectral_r')
     depth_uint8 = (cmap(depth_uint8)[:, :, :3] * 255)[:, :, ::-1].astype(np.uint8)
-    cv2.imwrite("metric_depth/depth_uint8.png", depth_uint8)  
+    cv2.imwrite("vis_depth/depth_uint8.png", depth_uint8)  
 
     # 이미지 로드 및 전처리
     masks_ordered = get_cluster_masks_ordered(depth_uint8)
@@ -394,13 +393,13 @@ def get_tray_top_mask(depth, tray_mask):
 
     tray_top_mask = tray_top_masks[0] & (tray_mask == 1)
 
-    cv2.imwrite("metric_depth/tray_top_mask_b.png", tray_top_mask.astype(np.uint8)*255)
+    cv2.imwrite("vis_depth/tray_top_mask_b.png", tray_top_mask.astype(np.uint8)*255)
     tray_top_mask = cv2.erode(tray_top_mask.astype(np.uint8), np.ones((10, 10), np.uint8), iterations=1)
     # 원본 이미지에서 해당 클러스터 영역만 추출
     # largest_cluster_image = np.zeros_like(image_rgb)
     # largest_cluster_image[mask] = image_rgb[mask]
 
-    cv2.imwrite("metric_depth/tray_top_mask.png", tray_top_mask.astype(np.uint8)*255)
+    cv2.imwrite("vis_depth/tray_top_mask.png", tray_top_mask.astype(np.uint8)*255)
     return tray_top_mask
 
 def select_tray_top_with_center_area(tray_top_masks):
@@ -435,7 +434,7 @@ def get_cluster_masks_ordered(image):
     pixels = image_rgb.reshape((-1, 3))
 
     # K-means clustering 수행
-    k = 5  # 클러스터 수 설정
+    k = 7  # 클러스터 수 설정
     kmeans = KMeans(n_clusters=k, random_state=42).fit(pixels)
     labels = kmeans.labels_
 
@@ -449,7 +448,7 @@ def get_cluster_masks_ordered(image):
         label = label_ordered[i][0]
         mask = (labels == label).reshape(image.shape[:2])
         masks.append(mask)
-        cv2.imwrite(f"metric_depth/mask_{i}.png", mask.astype(np.uint8) * 255)
+        cv2.imwrite(f"vis_depth/mask_{i}.png", mask.astype(np.uint8) * 255)
     return masks
 
 
@@ -457,20 +456,20 @@ def select_tray_tops_with_convexhull(masks, n_top=2):
 
     areas = []
     for i, mask in enumerate(masks):
-        area, _= calc_convexhull_area(mask)
+        area, _= calc_convexhull_area(mask, i)
         areas.append((i, area))
 
     areas = sorted(areas, key=lambda x: x[1], reverse=True)
 
     tray_top_masks = []
-    for i in range(n_top):
+    for i in range(min(n_top, len(masks))):
         tray_top_masks.append(masks[areas[i][0]])
     tray_top_masks = np.array(tray_top_masks)
 
     return tray_top_masks
     
 
-def calc_convexhull_area(mask):
+def calc_convexhull_area(mask, i):
 
     input_mask = mask.astype(np.uint8) * 255
     # 이진화 처리 (이미 흑백 이미지이므로 0, 255로 변환)
@@ -488,7 +487,7 @@ def calc_convexhull_area(mask):
     # Convex Hull 영역 넓이 계산 (각 Hull의 넓이를 더함)
     total_area = sum(cv2.contourArea(cv2.convexHull(contour)) for contour in contours)
     
-    output_path = "metric_depth/convex_hull_mask.png"
+    output_path = f"vis_depth/convex_hull_mask_{i}.png"
     cv2.imwrite(output_path, convex_mask)
     return total_area, mask
 
@@ -510,7 +509,7 @@ def calc_plane_params(depth, tray_top_mask, scale_factor):
     a, b = model.coef_
     c = model.intercept_
 
-    print(f"Plane equation: z = {a}*x + {b}*y + {c}")
+    # print(f"Plane equation: z = {a}*x + {b}*y + {c}")
 
     # 평면 방정식을 기반으로 점 생성 (예: 시각화용 샘플링)
     x_range = np.linspace(x.min(), x.max(), 100)
@@ -531,19 +530,16 @@ def calc_plane_params(depth, tray_top_mask, scale_factor):
     plane_area_pcd.points = o3d.utility.Vector3dVector(plane_area_points)
     plane_area_pcd.paint_uniform_color([0, 0, 1])
 
-
     not_plane_indices = tray_top_mask == 0
     not_plane_points = np.column_stack((x_coords[not_plane_indices], y_coords[not_plane_indices], depth[not_plane_indices] * scale_factor))
+    not_plane_points = not_plane_points[(not_plane_points[:, 2] > 0) & (not_plane_points[:, 2] <= 1000)]
     not_plane_pcd = o3d.geometry.PointCloud()
     not_plane_pcd.points = o3d.utility.Vector3dVector(not_plane_points)
     not_plane_pcd.paint_uniform_color([1, 0, 0])
 
-
-
     return [a, b, c], plane_pcd, plane_area_pcd, not_plane_pcd
 
-
-def get_height_per_food(depth, food_mask, scale_factor, plane_params):
+def get_height_from_top_per_food(depth, food_mask, scale_factor, plane_params):
 
     food_mask = cv2.erode(food_mask.astype(np.uint8), np.ones((5, 5), np.uint8), iterations=1)
 
@@ -603,6 +599,7 @@ def get_food_masks(results, shape, crop_loc):
 
 def calc_height_of_bottom_from_top(depth, plane_params, tray_mask, food_masks, scale_factor):
 
+    tray_mask = cv2.erode(tray_mask.astype(np.uint8), np.ones((10, 10), np.uint8), iterations=1)
     no_food_mask = np.logical_and(tray_mask, np.logical_not(np.logical_or.reduce(list(food_masks.values())))) 
     
     x_coords, y_coords = np.meshgrid(np.arange(depth.shape[1]), np.arange(depth.shape[0]))  
@@ -621,12 +618,16 @@ def calc_height_of_bottom_from_top(depth, plane_params, tray_mask, food_masks, s
     max_distance_index = np.argmin(distances)
     max_x = inlier_points[max_distance_index, 0]
     max_y = inlier_points[max_distance_index, 1]
-
-    depth_uint8 = (depth * 255).astype(np.uint8)
+    # max_distance_index = np.where((inlier_points[:, 0]== max_x) & (inlier_points[:, 1] == max_y))[0][0]
+    
+    
+    
+    depth_uint8 = (depth - depth.min()) / (depth.max() - depth.min()) * 255.0
+    # depth_uint8 = (depth*255 ).astype(np.uint8)
     depth_colored = cv2.cvtColor(depth_uint8, cv2.COLOR_GRAY2BGR)
     cv2.circle(depth_colored, (int(max_x), int(max_y)), 5, (0, 0, 255), -1)
-    cv2.imwrite('metric_depth/depth_with_dist_max_point.png', depth_colored)
-    return np.min(distances)
+    cv2.imwrite('vis_depth/depth_with_dist_max_point.png', depth_colored)
+    return distances[max_distance_index]
 
 def is_exist_foods_at_all_compart():
 

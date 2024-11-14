@@ -12,7 +12,7 @@ import pandas as pd
 
 from depth_anything_v2.dpt import DepthAnythingV2
 from nuviAPI.s3 import s3_api
-from util.utils import *
+from metric_depth.util.utils import *
 
 def draw_registration_result(source, target, transformation):
     
@@ -38,7 +38,7 @@ def main():
                         help='Maximum depth value for the depth map.')
     parser.add_argument('--img-path', type=str, required=False,
                         help='Path to the input image or directory containing images.')
-    parser.add_argument('--outdir', type=str, default='./vis_pointcloud',
+    parser.add_argument('--outdir', type=str, default='./vis_depth',
                         help='Directory to save the output point clouds.')
     parser.add_argument('--focal-length-x', default=470.4, type=float,
                         help='Focal length along the x-axis.')
@@ -55,27 +55,22 @@ def main():
 
     args = parser.parse_args()
 
-
-    # Determine the device to use (CUDA, MPS, or CPU)
     DEVICE = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
-
-    # Model configuration based on the chosen encoder
+    
     model_configs = {
         'vits': {'encoder': 'vits', 'features': 64, 'out_channels': [48, 96, 192, 384]},
         'vitb': {'encoder': 'vitb', 'features': 128, 'out_channels': [96, 192, 384, 768]},
         'vitl': {'encoder': 'vitl', 'features': 256, 'out_channels': [256, 512, 1024, 1024]},
         'vitg': {'encoder': 'vitg', 'features': 384, 'out_channels': [1536, 1536, 1536, 1536]}
     }
-
-    # Initialize the DepthAnythingV2 model with the specified configuration
-    depth_anything = DepthAnythingV2(**{**model_configs[args.encoder], 'max_depth': args.max_depth})
-    depth_anything.load_state_dict(torch.load(args.load_from, map_location='cpu'))
+    
+    depth_anything = DepthAnythingV2(**model_configs[args.encoder])
+    depth_anything.load_state_dict(torch.load(f'checkpoints/depth_anything_v2_{args.encoder}.pth', map_location='cpu'))
     depth_anything = depth_anything.to(DEVICE).eval()
 
     # Create the output directory if it doesn't exist
     os.makedirs(args.outdir, exist_ok=True)
 
-    
     bucket = args.s3_bucket
     if args.is_img_s3_uri :
         df = pd.read_csv('/home/seungu/Downloads/sauce filtering test - 시트1.csv')
@@ -83,15 +78,16 @@ def main():
     else :
         pass
 
-    cont_point = 58
+    cont_point = 27
+    scale_factor = 100
 
     food_results_list = []
     bottom_heights = []
-    for k, filename in enumerate(filenames):
+    for k, filename in enumerate(filenames[:100]):
 
-        # if k != cont_point:
-        #     continue
-
+        if k != cont_point:
+            continue
+        print('k :', k)
 
         if args.is_img_s3_uri :
             filename = filename.replace('-inferenced.json', '.png')
@@ -128,11 +124,10 @@ def main():
             pred = depth_anything.infer_image(image, height)
             print('infer time:', time.time()-s)
 
-        
         ## tray top 점들로 linear regression하여 평면의 방정식을 획득한다.
         tray_top_mask = get_tray_top_mask(pred, tray_mask[top:bottom+1, left:right+1])
-
-        scale_factor = 100
+        
+        pred = np.where(pred == 0, 0, 1 / pred)
         plane_params, plane_pcd, plane_area_pcd, not_plane_pcd = calc_plane_params(pred, tray_top_mask, scale_factor)
 
         food_masks, food_indices = get_food_masks(results, image.shape[:2], crop_loc)
@@ -142,6 +137,7 @@ def main():
         # else :
         bottom_height = calc_height_of_bottom_from_top(pred, plane_params, tray_mask[top:bottom+1, left:right+1], food_masks, scale_factor)
         bottom_heights.append(bottom_height)
+        print(f"bottom_height: {bottom_height}")
 
         food_pcds = []
         food_results=""
@@ -149,11 +145,12 @@ def main():
             food_mask = food_masks[idx]
 
             ## 평면과 각 음식들의 평균 거리와 std 값을 구한다.
-            height, std_h, food_pcd = get_height_per_food(pred, food_mask, scale_factor, plane_params)
+            height, std_h, food_pcd = get_height_from_top_per_food(pred, food_mask, scale_factor, plane_params)
             food_pcds.append(food_pcd)
+            print('food height from top:', height)
 
-            food_h = np.abs(bottom_height) - np.abs(height)
-            result_str = f"{results['class_names'][idx]}, {food_h}, {std_h}\n"
+            food_h = -(bottom_height - height) ## height 값이 음값이기에, -1을 곱해준다.
+            result_str = f"{results['class_names'][idx]} {food_h} {height}\n"
             print(result_str)
             if 'food_results' not in locals():
                 food_results = result_str
