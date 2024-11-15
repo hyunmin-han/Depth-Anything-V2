@@ -14,19 +14,6 @@ from depth_anything_v2.dpt import DepthAnythingV2
 from nuviAPI.s3 import s3_api
 from metric_depth.util.utils import *
 
-def draw_registration_result(source, target, transformation):
-    
-    source_temp = copy.deepcopy(source)
-    target_temp = copy.deepcopy(target)
-    source_temp.paint_uniform_color([1, 0.706, 0])
-    target_temp.paint_uniform_color([0, 0.651, 0.929])
-    source_temp.transform(transformation)
-    o3d.visualization.draw_geometries([source_temp, target_temp],
-                                      zoom=0.4459,
-                                      front=[0.9288, -0.2951, -0.2242],
-                                      lookat=[1.6784, 2.0612, 1.4451],
-                                      up=[-0.3402, -0.9189, -0.1996])
-
 def main():
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description='Generate depth maps and point clouds from images.')
@@ -75,21 +62,31 @@ def main():
     if args.is_img_s3_uri :
         df = pd.read_csv('/home/seungu/Downloads/sauce filtering test - 시트1.csv')
         filenames = df['s3_key']
+
     else :
         pass
 
-    cont_point = 27
+    cont_point = 13
     scale_factor = 100
 
     food_results_list = []
     bottom_heights = []
+
+    filenames = [
+        "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_133826_17404_L_A_10064008642000025_Trayfile-inferenced.json",
+        "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_133718_17424_L_A_10064008642000011_Trayfile-inferenced.json",
+        "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_133054_17411_L_A_10064008642000025_Trayfile-inferenced.json",
+        "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_132021_17499_L_A_10064008642000011_Trayfile-inferenced.json",
+        "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_131956_17346_L_A_10164000044A0002A_Trayfile-inferenced.json",
+    ]
     for k, filename in enumerate(filenames[:100]):
 
-        if k != cont_point:
-            continue
+        # if k != cont_point:
+        #     continue
         print('k :', k)
 
         if args.is_img_s3_uri :
+            filename = filename.replace('s3://nuvi-data/', '')
             filename = filename.replace('-inferenced.json', '.png')
             image = s3_api.get_image(bucket, filename)
         else :
@@ -125,7 +122,7 @@ def main():
             print('infer time:', time.time()-s)
 
         ## tray top 점들로 linear regression하여 평면의 방정식을 획득한다.
-        tray_top_mask = get_tray_top_mask(pred, tray_mask[top:bottom+1, left:right+1])
+        tray_top_mask = get_tray_top_mask(pred, tray_mask[top:bottom+1, left:right+1], args.save_name)
         
         pred = np.where(pred == 0, 0, 1 / pred)
         plane_params, plane_pcd, plane_area_pcd, not_plane_pcd = calc_plane_params(pred, tray_top_mask, scale_factor)
@@ -149,8 +146,8 @@ def main():
             food_pcds.append(food_pcd)
             print('food height from top:', height)
 
-            food_h = -(bottom_height - height) ## height 값이 음값이기에, -1을 곱해준다.
-            result_str = f"{results['class_names'][idx]} {food_h} {height}\n"
+            ## height 값이 음값이기에, -1을 곱해준다.
+            result_str = f"{results['class_names'][idx]} {height:.3f}\n" 
             print(result_str)
             if 'food_results' not in locals():
                 food_results = result_str
@@ -158,12 +155,13 @@ def main():
                 food_results += result_str
         food_results_list.append(food_results)
 
+        print('total time:', time.time()-s)
     # Save the results to a DataFrame and write to a CSV file
     df_results = pd.DataFrame({
         'food_heights': food_results_list,
         'bottom_heights': bottom_heights
     }) 
-    df_results.to_csv(os.path.join(args.outdir, 'food_heights.csv'), index=False) 
+    df_results.to_csv(os.path.join(args.outdir, f'food_heights_{args.save_name}.csv'), index=False) 
 
 
 

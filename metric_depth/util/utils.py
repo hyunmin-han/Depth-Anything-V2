@@ -368,7 +368,7 @@ def crop_by_tray_area(image, tray_mask):
     return cropped_image, [top, bottom, left, right]
 
 
-def get_tray_top_mask(depth, tray_mask):
+def get_tray_top_mask(depth, tray_mask, save_name):
 
     ## tray top 획득
     ## 1. kmeans clustering
@@ -393,13 +393,13 @@ def get_tray_top_mask(depth, tray_mask):
 
     tray_top_mask = tray_top_masks[0] & (tray_mask == 1)
 
-    cv2.imwrite("vis_depth/tray_top_mask_b.png", tray_top_mask.astype(np.uint8)*255)
+    cv2.imwrite(f"vis_depth/tray_top_mask_b_{save_name}.jpg", tray_top_mask.astype(np.uint8)*255)
     tray_top_mask = cv2.erode(tray_top_mask.astype(np.uint8), np.ones((10, 10), np.uint8), iterations=1)
     # 원본 이미지에서 해당 클러스터 영역만 추출
     # largest_cluster_image = np.zeros_like(image_rgb)
     # largest_cluster_image[mask] = image_rgb[mask]
 
-    cv2.imwrite("vis_depth/tray_top_mask.png", tray_top_mask.astype(np.uint8)*255)
+    cv2.imwrite(f"vis_depth/tray_top_mask_{save_name}.jpg", tray_top_mask.astype(np.uint8)*255)
     return tray_top_mask
 
 def select_tray_top_with_center_area(tray_top_masks):
