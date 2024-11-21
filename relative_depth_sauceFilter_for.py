@@ -67,18 +67,29 @@ def main():
         pass
 
     cont_point = 13
-    scale_factor = 100
+    scale_factor = 100000
 
     food_results_list = []
     bottom_heights = []
 
-    filenames = [
-        "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_133826_17404_L_A_10064008642000025_Trayfile-inferenced.json",
-        "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_133718_17424_L_A_10064008642000011_Trayfile-inferenced.json",
-        "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_133054_17411_L_A_10064008642000025_Trayfile-inferenced.json",
-        "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_132021_17499_L_A_10064008642000011_Trayfile-inferenced.json",
-        "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_131956_17346_L_A_10164000044A0002A_Trayfile-inferenced.json",
-    ]
+    # filenames = [
+    #     "sawoo-es/240927/L/A/sawoo-es_240927_034618_16844_L_A_VS-2407080010_Trayfile-inferenced.json"
+
+    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_122815_16936_L_A_10064008642000011_Trayfile.png",
+    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_133826_17404_L_A_10064008642000025_Trayfile.png",
+    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_133054_17411_L_A_10064008642000025_Trayfile.png",
+    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_133718_17424_L_A_10064008642000011_Trayfile.png",
+    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_131944_17361_L_A_10164000044A0002A_Trayfile.png",
+    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_122637_17104_L_A_1006400864200000B_Trayfile.png",
+    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_114145_16860_L_A_10064008642000011_Trayfile.png",
+    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_114204_16860_L_A_10164000044A0002A_Trayfile.png",
+    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_133814_17404_L_A_10064008642000025_Trayfile.png",
+    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_114213_16860_L_A_10164000044A0002A_Trayfile.png",
+    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_123430_16899_L_A_10064008642000011_Trayfile.png",
+    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_131956_17346_L_A_10164000044A0002A_Trayfile.png",
+    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_132021_17499_L_A_10064008642000011_Trayfile.png",
+    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_131936_17361_L_A_10164000044A0002A_Trayfile.png",
+    # ]
     for k, filename in enumerate(filenames[:100]):
 
         # if k != cont_point:
@@ -123,7 +134,10 @@ def main():
 
         ## tray top 점들로 linear regression하여 평면의 방정식을 획득한다.
         tray_top_mask = get_tray_top_mask(pred, tray_mask[top:bottom+1, left:right+1], args.save_name)
-        
+        # np.save(f'tray_top_masks/{k}.npy', tray_top_mask)
+        cv2.imwrite(f"tray_top_masks/{k}.jpg", tray_top_mask.astype(np.uint8)*255)
+
+        continue
         pred = np.where(pred == 0, 0, 1 / pred)
         plane_params, plane_pcd, plane_area_pcd, not_plane_pcd = calc_plane_params(pred, tray_top_mask, scale_factor)
 
@@ -146,8 +160,10 @@ def main():
             food_pcds.append(food_pcd)
             print('food height from top:', height)
 
+            height_from_bottom = -(bottom_height - height)
+
             ## height 값이 음값이기에, -1을 곱해준다.
-            result_str = f"{results['class_names'][idx]} {height:.3f}\n" 
+            result_str = f"{results['class_names'][idx]} {height:.3f} {height_from_bottom:.3f}\n" 
             print(result_str)
             if 'food_results' not in locals():
                 food_results = result_str

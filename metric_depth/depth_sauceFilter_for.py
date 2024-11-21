@@ -14,19 +14,6 @@ from depth_anything_v2.dpt import DepthAnythingV2
 from nuviAPI.s3 import s3_api
 from util.utils import *
 
-def draw_registration_result(source, target, transformation):
-    
-    source_temp = copy.deepcopy(source)
-    target_temp = copy.deepcopy(target)
-    source_temp.paint_uniform_color([1, 0.706, 0])
-    target_temp.paint_uniform_color([0, 0.651, 0.929])
-    source_temp.transform(transformation)
-    o3d.visualization.draw_geometries([source_temp, target_temp],
-                                      zoom=0.4459,
-                                      front=[0.9288, -0.2951, -0.2242],
-                                      lookat=[1.6784, 2.0612, 1.4451],
-                                      up=[-0.3402, -0.9189, -0.1996])
-
 def main():
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description='Generate depth maps and point clouds from images.')
@@ -83,17 +70,39 @@ def main():
     else :
         pass
 
-    cont_point = 58
+    cont_point = 2
+    scale_factor = 1000
 
     food_results_list = []
     bottom_heights = []
-    for k, filename in enumerate(filenames):
 
-        # if k != cont_point:
-        #     continue
+    # filenames = [
+    #     "sawoo-es/240927/L/A/sawoo-es_240927_034618_16844_L_A_VS-2407080010_Trayfile-inferenced.json",
+
+    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_122815_16936_L_A_10064008642000011_Trayfile.png",
+    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_133826_17404_L_A_10064008642000025_Trayfile.png",
+    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_133054_17411_L_A_10064008642000025_Trayfile.png",
+    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_133718_17424_L_A_10064008642000011_Trayfile.png",
+    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_131944_17361_L_A_10164000044A0002A_Trayfile.png",
+    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_122637_17104_L_A_1006400864200000B_Trayfile.png",
+    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_114145_16860_L_A_10064008642000011_Trayfile.png",
+    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_114204_16860_L_A_10164000044A0002A_Trayfile.png",
+    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_133814_17404_L_A_10064008642000025_Trayfile.png",
+    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_114213_16860_L_A_10164000044A0002A_Trayfile.png",
+    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_123430_16899_L_A_10064008642000011_Trayfile.png",
+    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_131956_17346_L_A_10164000044A0002A_Trayfile.png",
+    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_132021_17499_L_A_10064008642000011_Trayfile.png",
+    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_131936_17361_L_A_10164000044A0002A_Trayfile.png",
+    # ]
+    for k, filename in enumerate(filenames[:100]):
+
+        if k != cont_point:
+            continue
+        print('k :', k)
 
 
         if args.is_img_s3_uri :
+            filename = filename.replace('s3://nuvi-data/', '')
             filename = filename.replace('-inferenced.json', '.png')
             image = s3_api.get_image(bucket, filename)
         else :
@@ -130,9 +139,11 @@ def main():
 
         
         ## tray top 점들로 linear regression하여 평면의 방정식을 획득한다.
-        tray_top_mask = get_tray_top_mask(pred, tray_mask[top:bottom+1, left:right+1])
+        # tray_top_mask = get_tray_top_mask(pred, tray_mask[top:bottom+1, left:right+1])
 
-        scale_factor = 100
+        tray_top_mask = np.load(f'tray_top_masks/{k}.npy')
+        cv2.imwrite(f"vis_depth/tray_top_mask.jpg", tray_top_mask.astype(np.uint8)*255)
+
         plane_params, plane_pcd, plane_area_pcd, not_plane_pcd = calc_plane_params(pred, tray_top_mask, scale_factor)
 
         food_masks, food_indices = get_food_masks(results, image.shape[:2], crop_loc)
@@ -149,11 +160,12 @@ def main():
             food_mask = food_masks[idx]
 
             ## 평면과 각 음식들의 평균 거리와 std 값을 구한다.
-            height, std_h, food_pcd = get_height_per_food(pred, food_mask, scale_factor, plane_params)
+            height, std_h, food_pcd = get_height_from_top_per_food(pred, food_mask, scale_factor, plane_params)
             food_pcds.append(food_pcd)
+            print('food height from top:', height)
 
-            food_h = np.abs(bottom_height) - np.abs(height)
-            result_str = f"{results['class_names'][idx]}, {food_h}, {std_h}\n"
+            height_from_bottom = -(bottom_height - height)
+            result_str = f"{results['class_names'][idx]} {height:.3f} {height_from_bottom:.3f}\n"
             print(result_str)
             if 'food_results' not in locals():
                 food_results = result_str
@@ -166,7 +178,7 @@ def main():
         'food_heights': food_results_list,
         'bottom_heights': bottom_heights
     }) 
-    df_results.to_csv(os.path.join(args.outdir, 'food_heights.csv'), index=False) 
+    df_results.to_csv(os.path.join(args.outdir, f'food_heights_{args.save_name}.csv'), index=False) 
 
 
 
