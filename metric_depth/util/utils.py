@@ -682,23 +682,33 @@ def calc_height_of_bottom_from_top(depth, plane_params, tray_mask, food_masks, s
         z = depth[mask_indices]
         x = (x_coords[mask_indices] - W / 2) / fx * z
         y = (y_coords[mask_indices] - H / 2) / fy * z
+
     inlier_points = statistical_outlier_removal(np.column_stack((x, y, z)))
 
     distances = calc_distances_to_plane(inlier_points[:, 0], inlier_points[:, 1], inlier_points[:, 2], plane_params)
 
     ## 평면에서 식판쪽 거리가 음값이기에 argmin으로 연산.
-    max_distance_index = np.argmin(distances)
-    max_x = inlier_points[max_distance_index, 0]
-    max_y = inlier_points[max_distance_index, 1]
-    # max_distance_index = np.where((inlier_points[:, 0]== max_x) & (inlier_points[:, 1] == max_y))[0][0]
+    if fx is None or fy is None:
+        max_distance_index = np.argmin(distances)
+        max_x = inlier_points[max_distance_index, 0]
+        max_y = inlier_points[max_distance_index, 1]
+    else : 
+        max_distance_index = np.argmin(distances)
+        X = inlier_points[max_distance_index, 0]
+        Y = inlier_points[max_distance_index, 1]
+        Z = inlier_points[max_distance_index, 2]
+
+        max_x = int((X * fx) / Z + W / 2)
+        max_y = int((Y * fy) / Z + H / 2)
+
     
     
     depth_uint8 = (depth - depth.min()) / (depth.max() - depth.min()) * 255.0
     # depth_uint8 = (depth*255 ).astype(np.uint8)
     depth_colored = cv2.cvtColor(depth_uint8, cv2.COLOR_GRAY2BGR)
     cv2.circle(depth_colored, (int(max_x), int(max_y)), 5, (0, 0, 255), -1)
-    cv2.imwrite('masks/depth_with_dist_max_point.png', depth_colored)
-    return distances[max_distance_index]
+    # cv2.imwrite('masks/depth_with_dist_max_point.png', depth_colored)
+    return distances[max_distance_index], depth_colored
 
 def is_exist_foods_at_all_compart():
 
