@@ -151,22 +151,10 @@ def main():
 
         t = time.time()
         food_masks, food_indices, food_masks_original = get_food_masks(results, image.shape[:2], crop_loc)
-
-
-        # ############################
         tray_top_mask, initial_point = get_tray_top_mask2(pred, tray_mask, list(food_masks.values()))
-        cropped_image_ = copy.deepcopy(cropped_image)
-        cv2.circle(cropped_image_, initial_point, radius=5, color=(0, 0, 255), thickness=-1)
-        
-        folder_name = f'_output/{args.save_name}/centers'
-        os.makedirs(folder_name, exist_ok=True)
-        cv2.imwrite(f"{folder_name}/{k}.jpg", cropped_image_)
+
         count_nonzero = np.count_nonzero(tray_top_mask)
 
-        folder_name = f'_output/{args.save_name}/tray_top_masks'
-        os.makedirs(folder_name, exist_ok=True)
-        cv2.imwrite(f"{folder_name}/{k}.jpg", tray_top_mask.astype(np.uint8)*255)
-        
         if count_nonzero < 100 : 
 
             # ## tray top 점들로 linear regression하여 평면의 방정식을 획득한다.
@@ -174,52 +162,16 @@ def main():
                                                         tray_mask, 
                                                         list(food_masks.values()),
                                                         depth_saturate_threshold=1.3)
-            cv2.imwrite(f"output/pred_uint8/{k}.jpg", depth_uint8)
+            
 
-            # tray_top_mask = np.load(f'tray_top_masks/{k}.npy')
-            # folder_name = 'output/tray_top_masks_cluster'
-            os.makedirs(folder_name, exist_ok=True)
-            cv2.imwrite(f"{folder_name}/{k}.jpg", tray_top_mask.astype(np.uint8)*255)
-
-        # ###########################
-        # folder_name = 'output/tray_top_masks_testset_onlycluster'
-        # os.makedirs(folder_name, exist_ok=True)
-
-        # # ## tray top 점들로 linear regression하여 평면의 방정식을 획득한다.
-        # tray_top_mask, depth_uint8 = get_tray_top_mask(pred, 
-        #                                             tray_mask, 
-        #                                             list(food_masks.values()),
-        #                                             depth_saturate_threshold=1.3)
-        # cv2.imwrite(f"output/pred_uint8/{k}.jpg", depth_uint8)
-
-        # # tray_top_mask = np.load(f'tray_top_masks/{k}.npy')
-        # # folder_name = 'output/tray_top_masks_cluster'
-        # os.makedirs(folder_name, exist_ok=True)
-        # cv2.imwrite(f"{folder_name}/{k}.jpg", tray_top_mask.astype(np.uint8)*255)
-        ###########################
-
-        plane_params, plane_pcd, plane_area_pcd, not_plane_pcd = calc_plane_params(pred, tray_top_mask, scale_factor,
-                                                                                 fx=fx, fy=fy)
+        plane_params = calc_plane_params(pred, tray_top_mask, scale_factor,
+                                                                                 fx=fx, fy=fy, is_vis=False)
 
 
         bottom_height, depth_colored = calc_height_of_bottom_from_top(pred, plane_params, tray_mask,
                                                         food_masks, scale_factor, fx=fx, fy=fy)
 
 
-        folder_name = f'_output/{args.save_name}/dist_max_point'
-        os.makedirs(folder_name, exist_ok=True)
-        cv2.imwrite(f'{folder_name}/{k}.jpg', depth_colored)
-        
-        bottom_heights.append(bottom_height)
-
-        food_pcds = []
-        food_results=""
-        is_zero_results = ""
-
-        height_percentage_str = ""
-        output = cv2.cvtColor(image, cv2.COLOR_BGR2BGRA)
-        output[:, :, 3] = 100
-        is_zero = False
         for idx in food_indices:
             food_mask = food_masks[idx]
             food_mask_original = food_masks_original[idx]
@@ -227,8 +179,6 @@ def main():
             ## 평면과 각 음식들의 평균 거리와 std 값을 구한다.
             height, std_h, food_pcd = get_height_from_top_per_food(pred, food_mask, scale_factor, plane_params,
                                                                 fx=fx, fy=fy)
-            food_pcds.append(food_pcd)
-            print('food height from top:', height)
 
             height_from_bottom = -(bottom_height - height)
 
@@ -237,37 +187,8 @@ def main():
             # Calculate height percentage
             height_percentage = -height_from_bottom / bottom_height
 
-            if height_percentage < 0.3:
-                is_zero = True
-                
-                # Set the alpha channel to highlight the food mask
-                output[food_mask_original == 1, 3] = 255  # Semi-transparent for non-food areas
-                height_percentage_str += f"{results['class_names'][idx]} {height_percentage:.3f},"
-
-
-            result_str = f"{results['class_names'][idx]} {height:.3f} {height_from_bottom:.3f} {height_percentage:.3f}\n"
-            print(result_str)
-            if 'food_results' not in locals():
-                food_results = result_str
-            else:
-                food_results += result_str
-
         print('algorithm time:', time.time()-t)
-
-        if is_zero:
-            folder_name = f'_output/{args.save_name}/highlighted_masks'
-            os.makedirs(folder_name, exist_ok=True)
-            cv2.imwrite(f"{folder_name}/{k}_{results['class_names'][idx]}.png", output)
-            zero_uris.append(filename)
-            zero_height_percentages.append(height_percentage_str)
-            
-
-
-        food_results_list.append(food_results)
-
-        folder_name = f'_output/{args.save_name}/pcds'
-        os.makedirs(folder_name, exist_ok=True)
-        merge_point_clouds_and_save([plane_pcd, plane_area_pcd, not_plane_pcd]+food_pcds, f'{folder_name}/{k}.ply')
+        
     # Save the results to a DataFrame and write to a CSV file
     df_results = pd.DataFrame({
         'food_heights': food_results_list,

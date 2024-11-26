@@ -384,7 +384,7 @@ def get_tray_top_mask(depth, tray_mask, food_masks, depth_saturate_threshold=1.5
 
     # Set depth values that are not frequent to mean - std and mean + std
     # depth[depth < (mean_depth - std_depth*3)] = mean_depth - std_depth*3
-    depth[depth > (mean_depth + std_depth*3)] = mean_depth + std_depth*3
+    depth[depth > (mean_depth + std_depth*3)] = mean_depth + std_depth * 3
 
 
     depth_uint8 = (depth - depth.min()) / (depth.max() - depth.min())  * 255.0
@@ -405,8 +405,6 @@ def get_tray_top_mask(depth, tray_mask, food_masks, depth_saturate_threshold=1.5
     # tray_top_mask = tray_top_masks[0] & (tray_mask == 1)
     tray_top_mask = tray_top_mask & (tray_mask == 1)
     tray_top_mask, food_area_ratio = remove_food_area(tray_top_mask, food_masks)
-
-
     
     cv2.imwrite(f"masks/tray_top_mask_b{save_name}.jpg", tray_top_mask.astype(np.uint8)*255)
     tray_top_mask = cv2.erode(tray_top_mask.astype(np.uint8), np.ones((10, 10), np.uint8), iterations=1)
@@ -417,7 +415,7 @@ def get_tray_top_mask(depth, tray_mask, food_masks, depth_saturate_threshold=1.5
     cv2.imwrite(f"masks/tray_top_mask{save_name}.jpg", tray_top_mask.astype(np.uint8)*255)
     return tray_top_mask, depth_uint8
 
-def get_tray_top_mask2(depth, tray_mask, food_masks, image):
+def get_tray_top_mask2(depth, tray_mask, food_masks):
 
     initial_point = get_center_point(tray_mask)
 
@@ -528,7 +526,7 @@ def calc_convexhull_area(mask, i):
     cv2.imwrite(output_path, convex_mask)
     return total_area, mask
 
-def calc_plane_params(depth, tray_top_mask, scale_factor, fx=None, fy=None):
+def calc_plane_params(depth, tray_top_mask, scale_factor, fx=None, fy=None, is_vis=True):
 
     # 예제 데이터 생성
     H, W = depth.shape  # pred는 H x W 크기의 numpy 배열이라고 가정
@@ -568,38 +566,40 @@ def calc_plane_params(depth, tray_top_mask, scale_factor, fx=None, fy=None):
         x_grid, y_grid = np.meshgrid(x_range, y_range)
         z_grid = a * x_grid + b * y_grid + c  # 피팅된 평면의 z 값 계산
 
+    if is_vis :
+        # Open3D로 시각화
+        # 평면 포인트 생성
+        points = np.column_stack((x_grid.ravel(), y_grid.ravel(), z_grid.ravel()))
+        plane_pcd = o3d.geometry.PointCloud()
+        plane_pcd.points = o3d.utility.Vector3dVector(points)
+        plane_pcd.paint_uniform_color([0, 1, 0])
 
-    # Open3D로 시각화
-    # 평면 포인트 생성
-    points = np.column_stack((x_grid.ravel(), y_grid.ravel(), z_grid.ravel()))
-    plane_pcd = o3d.geometry.PointCloud()
-    plane_pcd.points = o3d.utility.Vector3dVector(points)
-    plane_pcd.paint_uniform_color([0, 1, 0])
+        # 원본 포인트 클라우드도 추가 (optional)
+        plane_area_points = np.column_stack((x, y, z))
+        plane_area_pcd = o3d.geometry.PointCloud()
+        plane_area_pcd.points = o3d.utility.Vector3dVector(plane_area_points)
+        plane_area_pcd.paint_uniform_color([0, 0, 1])
 
-    # 원본 포인트 클라우드도 추가 (optional)
-    plane_area_points = np.column_stack((x, y, z))
-    plane_area_pcd = o3d.geometry.PointCloud()
-    plane_area_pcd.points = o3d.utility.Vector3dVector(plane_area_points)
-    plane_area_pcd.paint_uniform_color([0, 0, 1])
+        not_plane_indices = tray_top_mask == 0
+        if fx is None or fy is None:
+            x = x_coords[not_plane_indices]
+            y = y_coords[not_plane_indices]
+            z = depth[not_plane_indices] * scale_factor
+        else :
+            z = depth[not_plane_indices]
+            x = (x_coords[not_plane_indices] - W / 2) / fx * z
+            y = (y_coords[not_plane_indices] - H / 2) / fy * z
 
+        not_plane_points = np.column_stack((x, y, z))
+        not_plane_points = not_plane_points[(not_plane_points[:, 2] > 0) & (not_plane_points[:, 2] <= 1000)]
+        not_plane_pcd = o3d.geometry.PointCloud()
+        not_plane_pcd.points = o3d.utility.Vector3dVector(not_plane_points)
+        not_plane_pcd.paint_uniform_color([1, 0, 0])
 
-    not_plane_indices = tray_top_mask == 0
-    if fx is None or fy is None:
-        x = x_coords[not_plane_indices]
-        y = y_coords[not_plane_indices]
-        z = depth[not_plane_indices] * scale_factor
+        return [a, b, c], plane_pcd, plane_area_pcd, not_plane_pcd
+    
     else :
-        z = depth[not_plane_indices]
-        x = (x_coords[not_plane_indices] - W / 2) / fx * z
-        y = (y_coords[not_plane_indices] - H / 2) / fy * z
-
-    not_plane_points = np.column_stack((x, y, z))
-    # not_plane_points = not_plane_points[(not_plane_points[:, 2] > 0) & (not_plane_points[:, 2] <= 1000)]
-    not_plane_pcd = o3d.geometry.PointCloud()
-    not_plane_pcd.points = o3d.utility.Vector3dVector(not_plane_points)
-    not_plane_pcd.paint_uniform_color([1, 0, 0])
-
-    return [a, b, c], plane_pcd, plane_area_pcd, not_plane_pcd
+        return [a, b, c]
 
 def get_height_from_top_per_food(depth, food_mask, scale_factor, plane_params, fx=None, fy=None):
 
@@ -648,11 +648,12 @@ def calc_distances_to_plane(X, Y, Z, plane_params):
     distances = a * X + b * Y - Z + d / np.sqrt(a**2 + b**2 + 1)
     return distances
 
-def get_food_masks(results, shape, crop_loc):
-
-    top, bottom, left, right = crop_loc
+def get_food_masks(results, shape, crop_loc=None):
     food_masks = {}
+    food_masks_original = {}
     food_indices = []
+    if crop_loc is not None:
+        top, bottom, left, right = crop_loc
     for i in range(len(results['class_names'])):
         if results['class_names'][i] in ["hand", "spoon", "chopsticks", "cutlery"] :
             pass
@@ -661,8 +662,12 @@ def get_food_masks(results, shape, crop_loc):
         else :
             food_indices.append(i)
             zero = np.zeros(shape)
-            food_masks[i] =  np.logical_or(zero, results['masks'][i])[top:bottom+1, left:right+1]
-    return food_masks, food_indices
+            if crop_loc is not None:
+                food_masks[i] =  np.logical_or(zero, results['masks'][i])[top:bottom+1, left:right+1]
+                food_masks_original[i] = results['masks'][i]
+            else :
+                food_masks[i] = results['masks'][i]
+    return food_masks, food_indices, food_masks_original
 
 def calc_height_of_bottom_from_top(depth, plane_params, tray_mask, food_masks, scale_factor, fx=None, fy=None):
 
@@ -700,8 +705,6 @@ def calc_height_of_bottom_from_top(depth, plane_params, tray_mask, food_masks, s
 
         max_x = int((X * fx) / Z + W / 2)
         max_y = int((Y * fy) / Z + H / 2)
-
-    
     
     depth_uint8 = (depth - depth.min()) / (depth.max() - depth.min()) * 255.0
     # depth_uint8 = (depth*255 ).astype(np.uint8)
