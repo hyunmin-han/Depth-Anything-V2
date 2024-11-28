@@ -19,18 +19,12 @@ def main():
     parser = argparse.ArgumentParser(description='Generate depth maps and point clouds from images.')
     parser.add_argument('--encoder', default='vitl', type=str, choices=['vits', 'vitb', 'vitl', 'vitg'],
                         help='Model encoder to use.')
-    parser.add_argument('--load-from', default='', type=str, required=True,
-                        help='Path to the pre-trained model weights.')
     parser.add_argument('--max-depth', default=20, type=float,
                         help='Maximum depth value for the depth map.')
     parser.add_argument('--img-path', type=str, required=False,
                         help='Path to the input image or directory containing images.')
     parser.add_argument('--outdir', type=str, default='./vis_depth',
                         help='Directory to save the output point clouds.')
-    parser.add_argument('--focal-length-x', default=470.4, type=float,
-                        help='Focal length along the x-axis.')
-    parser.add_argument('--focal-length-y', default=470.4, type=float,
-                        help='Focal length along the y-axis.')
     parser.add_argument('--is-img-s3-uri', type=bool, default=True,
                         help='boolean of S3 containing images.')
     parser.add_argument('--s3-bucket', type=str, required=False, default='nuvi-depth',
@@ -66,29 +60,34 @@ def main():
     else :
         pass
 
-    cont_point = 13
-    scale_factor = 100000
+    cont_point = 0
+    scale_factor = 1000
 
     food_results_list = []
     bottom_heights = []
 
     # filenames = [
-    #     "sawoo-es/240927/L/A/sawoo-es_240927_034618_16844_L_A_VS-2407080010_Trayfile-inferenced.json"
-
-    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_122815_16936_L_A_10064008642000011_Trayfile.png",
-    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_133826_17404_L_A_10064008642000025_Trayfile.png",
-    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_133054_17411_L_A_10064008642000025_Trayfile.png",
-    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_133718_17424_L_A_10064008642000011_Trayfile.png",
-    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_131944_17361_L_A_10164000044A0002A_Trayfile.png",
-    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_122637_17104_L_A_1006400864200000B_Trayfile.png",
-    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_114145_16860_L_A_10064008642000011_Trayfile.png",
-    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_114204_16860_L_A_10164000044A0002A_Trayfile.png",
-    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_133814_17404_L_A_10064008642000025_Trayfile.png",
-    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_114213_16860_L_A_10164000044A0002A_Trayfile.png",
-    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_123430_16899_L_A_10064008642000011_Trayfile.png",
-    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_131956_17346_L_A_10164000044A0002A_Trayfile.png",
-    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_132021_17499_L_A_10064008642000011_Trayfile.png",
-    #     # "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_131936_17361_L_A_10164000044A0002A_Trayfile.png",
+    #     "s3://nuvi-data/nuvilabs/241011/D/A/nuvilabs_241011_125911_13795_D_A_SERIALY_Trayfile-inferenced.json",
+    #     "s3://nuvi-data/sawoo-es/241119/L/A/sawoo-es_241119_122957_17155_L_A_10164000044A0002A_Trayfile.png",
+    #     "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_122720_16978_L_A_cb00cbbe143e6d68_Trayfile.png",
+    #     "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_033701_16877_L_A_VS-2407080010_Trayfile.png",
+    #     "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_041930_17329_L_A_VS-23101002_Trayfile.png",
+    #     "s3://nuvi-data/sawoo-es/241119/L/A/sawoo-es_241119_131759_17616_L_A_10164000044A0002A_Trayfile.png",
+    #     "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_131212_17228_L_A_10064008642000011_Trayfile.png",
+    #     "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_133054_17411_L_A_10064008642000025_Trayfile.png",
+    #     "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_123430_16899_L_A_10064008642000011_Trayfile.png",
+    #     "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_123544_16871_L_A_10064008642000011_Trayfile.png",
+    #     "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_122805_17063_L_A_1006400864200000B_Trayfile.png",
+    #     "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_034008_16938_L_A_VS-2407080010_Trayfile.png",
+    #     "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_122725_16956_L_A_10064008642000011_Trayfile.png",
+    #     "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_033329_17052_L_A_VS-23101004_Trayfile.png",
+    #     "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_132934_17326_L_A_10064008642000025_Trayfile.png",
+    #     "s3://nuvi-data/sawoo-es/241114/L/A/sawoo-es_241114_030634_17054_L_A_VS-23101004_Trayfile.png",
+    #     "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_034224_16936_L_A_VS-2407080010_Trayfile.png",
+    #     "s3://nuvi-data/sawoo-es/241119/L/A/sawoo-es_241119_124350_16842_L_A_10064008642000011_Trayfile.png",
+    #     "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_131112_17660_L_A_1006400864200000B_Trayfile.png",
+    #     "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_122951_17154_L_A_10064008642000025_Trayfile.png",
+    #     "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_034211_16941_L_A_VS-2407080010_Trayfile.png",
     # ]
     for k, filename in enumerate(filenames[:100]):
 
@@ -113,9 +112,9 @@ def main():
         depth_array = s3_api.get_npy(bucket, depth_key)
         results = json_to_result(labelme_json, depth_array.shape)
 
+        tray_mask = get_tray_mask(results['masks'], results['class_names'])
 
         if args.crop:
-            tray_mask = get_tray_mask(results['masks'], results['class_names'])
             # Get the bounding box of the tray mask
             cropped_image, crop_loc = crop_by_tray_area(image, tray_mask)
             top, bottom, left, right = crop_loc
@@ -126,27 +125,32 @@ def main():
             s = time.time()
             pred = depth_anything.infer_image(cropped_image, height)
             print('crop infer time:', time.time()-s)
+
+            tray_mask = tray_mask[top:bottom+1, left:right+1]
+
         else :
             height, width = image.shape[:2]
             s = time.time()
             pred = depth_anything.infer_image(image, height)
             print('infer time:', time.time()-s)
+            crop_loc = None
 
+        food_masks, food_indices, _ = get_food_masks(results, image.shape[:2], crop_loc)
         ## tray top 점들로 linear regression하여 평면의 방정식을 획득한다.
-        tray_top_mask = get_tray_top_mask(pred, tray_mask[top:bottom+1, left:right+1], args.save_name)
+        tray_top_mask, depth_uint8 = get_tray_top_mask(pred, tray_mask, 
+                                                    list(food_masks.values()),
+                                                    depth_saturate_threshold=1.3)
         # np.save(f'tray_top_masks/{k}.npy', tray_top_mask)
         cv2.imwrite(f"tray_top_masks/{k}.jpg", tray_top_mask.astype(np.uint8)*255)
 
-        continue
         pred = np.where(pred == 0, 0, 1 / pred)
         plane_params, plane_pcd, plane_area_pcd, not_plane_pcd = calc_plane_params(pred, tray_top_mask, scale_factor)
 
-        food_masks, food_indices = get_food_masks(results, image.shape[:2], crop_loc)
 
         # if is_exist_foods_at_all_compart(): 
         #     pass
         # else :
-        bottom_height = calc_height_of_bottom_from_top(pred, plane_params, tray_mask[top:bottom+1, left:right+1], food_masks, scale_factor)
+        bottom_height, depth_colored = calc_height_of_bottom_from_top(pred, plane_params, tray_mask, food_masks, scale_factor)
         bottom_heights.append(bottom_height)
         print(f"bottom_height: {bottom_height}")
 
@@ -170,6 +174,9 @@ def main():
             else:
                 food_results += result_str
         food_results_list.append(food_results)
+        folder_name = f'_output/{args.save_name}/pcds'
+        os.makedirs(folder_name, exist_ok=True)
+        merge_point_clouds_and_save([plane_pcd, plane_area_pcd, not_plane_pcd]+food_pcds, f'{folder_name}/{k}.ply')
 
         print('total time:', time.time()-s)
     # Save the results to a DataFrame and write to a CSV file

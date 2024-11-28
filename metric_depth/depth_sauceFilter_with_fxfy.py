@@ -76,7 +76,7 @@ def main():
     bottom_heights = []
     is_zeros_list = []
 
-    zero_uris, zero_height_percentages = [], []
+    zero_uris, zero_height_percentages, image_names = [], [], []
     # filenames = [
     #     "s3://nuvi-data/sawoo-es/241119/L/A/sawoo-es_241119_122957_17155_L_A_10164000044A0002A_Trayfile.png",
     #     "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_122720_16978_L_A_cb00cbbe143e6d68_Trayfile.png",
@@ -103,7 +103,7 @@ def main():
     fx = args.focal_length_x / 2
     fy = args.focal_length_y / 2
 
-    for k, filename in enumerate(filenames[:100]):
+    for k, filename in enumerate(filenames[:300]):
         # if k != cont_point:
         #     continue
         print('k :', k)
@@ -174,12 +174,16 @@ def main():
                                                         tray_mask, 
                                                         list(food_masks.values()),
                                                         depth_saturate_threshold=1.3)
-            cv2.imwrite(f"output/pred_uint8/{k}.jpg", depth_uint8)
 
             # tray_top_mask = np.load(f'tray_top_masks/{k}.npy')
             # folder_name = 'output/tray_top_masks_cluster'
             os.makedirs(folder_name, exist_ok=True)
             cv2.imwrite(f"{folder_name}/{k}.jpg", tray_top_mask.astype(np.uint8)*255)
+
+
+            folder_name = f'_output/{args.save_name}/depth_color'
+            os.makedirs(folder_name, exist_ok=True)
+            cv2.imwrite(f"{folder_name}/{k}.jpg", depth_uint8)
 
         # ###########################
         # folder_name = 'output/tray_top_masks_testset_onlycluster'
@@ -260,11 +264,9 @@ def main():
             cv2.imwrite(f"{folder_name}/{k}_{results['class_names'][idx]}.png", output)
             zero_uris.append(filename)
             zero_height_percentages.append(height_percentage_str)
-            
-
+            image_names.append(f"{k}_{results['class_names'][idx]}.png")
 
         food_results_list.append(food_results)
-
         folder_name = f'_output/{args.save_name}/pcds'
         os.makedirs(folder_name, exist_ok=True)
         merge_point_clouds_and_save([plane_pcd, plane_area_pcd, not_plane_pcd]+food_pcds, f'{folder_name}/{k}.ply')
@@ -277,6 +279,7 @@ def main():
 
     df_results2 = pd.DataFrame({
         'file_name': zero_uris,
+        'image_name': image_names,
         'food_heights_percentage': zero_height_percentages
     }) 
     df_results2.to_csv(os.path.join('_output', f'{args.save_name}/zero.csv'), index=False) 
