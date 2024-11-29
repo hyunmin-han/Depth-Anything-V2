@@ -63,51 +63,41 @@ def main():
     os.makedirs(args.outdir, exist_ok=True)
     
     bucket = args.s3_bucket
-    if args.is_img_s3_uri :
-        df = pd.read_csv('/home/seungu/Downloads/sauce filtering test - 시트1.csv')
-        filenames = df['s3_key']
-    else :
-        pass
 
-    cont_point = 0
     scale_factor = 100
 
     food_results_list = []
     bottom_heights = []
-    is_zeros_list = []
 
     zero_uris, zero_height_percentages = [], []
-    # filenames = [
-    #     "s3://nuvi-data/sawoo-es/241119/L/A/sawoo-es_241119_122957_17155_L_A_10164000044A0002A_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_122720_16978_L_A_cb00cbbe143e6d68_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_033701_16877_L_A_VS-2407080010_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_041930_17329_L_A_VS-23101002_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241119/L/A/sawoo-es_241119_131759_17616_L_A_10164000044A0002A_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_131212_17228_L_A_10064008642000011_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_133054_17411_L_A_10064008642000025_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_123430_16899_L_A_10064008642000011_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_123544_16871_L_A_10064008642000011_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_122805_17063_L_A_1006400864200000B_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_034008_16938_L_A_VS-2407080010_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_122725_16956_L_A_10064008642000011_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_033329_17052_L_A_VS-23101004_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_132934_17326_L_A_10064008642000025_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241114/L/A/sawoo-es_241114_030634_17054_L_A_VS-23101004_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_034224_16936_L_A_VS-2407080010_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241119/L/A/sawoo-es_241119_124350_16842_L_A_10064008642000011_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_131112_17660_L_A_1006400864200000B_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_122951_17154_L_A_10064008642000025_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_034211_16941_L_A_VS-2407080010_Trayfile.png",
-    # ]
+    filenames = [
+        "s3://nuvi-data/sawoo-es/241119/L/A/sawoo-es_241119_122957_17155_L_A_10164000044A0002A_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_122720_16978_L_A_cb00cbbe143e6d68_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_033701_16877_L_A_VS-2407080010_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_041930_17329_L_A_VS-23101002_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241119/L/A/sawoo-es_241119_131759_17616_L_A_10164000044A0002A_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_131212_17228_L_A_10064008642000011_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_133054_17411_L_A_10064008642000025_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_123430_16899_L_A_10064008642000011_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_123544_16871_L_A_10064008642000011_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_122805_17063_L_A_1006400864200000B_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_034008_16938_L_A_VS-2407080010_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_122725_16956_L_A_10064008642000011_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_033329_17052_L_A_VS-23101004_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_132934_17326_L_A_10064008642000025_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241114/L/A/sawoo-es_241114_030634_17054_L_A_VS-23101004_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_034224_16936_L_A_VS-2407080010_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241119/L/A/sawoo-es_241119_124350_16842_L_A_10064008642000011_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_131112_17660_L_A_1006400864200000B_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_122951_17154_L_A_10064008642000025_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_034211_16941_L_A_VS-2407080010_Trayfile.png",
+    ]
 
     fx = args.focal_length_x / 2
     fy = args.focal_length_y / 2
 
     for k, filename in enumerate(filenames[:100]):
-        # if k != cont_point:
-        #     continue
         print('k :', k)
-
 
         if args.is_img_s3_uri :
             filename = filename.replace('s3://nuvi-data/', '')
@@ -116,7 +106,6 @@ def main():
         else :
             filename = args.img_path
             image = cv2.imread(filename)
-
 
         # Read the image using OpenCV
         json_key = filename.replace('.png', '-inferenced.json')
@@ -164,8 +153,7 @@ def main():
                                                         depth_saturate_threshold=1.3)
             
 
-        plane_params = calc_plane_params(pred, tray_top_mask, scale_factor,
-                                                                                 fx=fx, fy=fy, is_vis=False)
+        plane_params = calc_plane_params(pred, tray_top_mask, scale_factor,fx=fx, fy=fy, is_vis=False)
 
 
         bottom_height, depth_colored = calc_height_of_bottom_from_top(pred, plane_params, tray_mask,

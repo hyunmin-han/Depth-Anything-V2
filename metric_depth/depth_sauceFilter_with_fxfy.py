@@ -31,8 +31,6 @@ def main():
                         help='Focal length along the x-axis.')
     parser.add_argument('--focal-length-y', default=470.4, type=float,
                         help='Focal length along the y-axis.')
-    parser.add_argument('--is-img-s3-uri', type=bool, default=True,
-                        help='boolean of S3 containing images.')
     parser.add_argument('--s3-bucket', type=str, required=False, default='nuvi-depth',
                         help='S3 bucket name.')
     parser.add_argument('--crop',  action='store_true',
@@ -63,42 +61,37 @@ def main():
     os.makedirs(args.outdir, exist_ok=True)
     
     bucket = args.s3_bucket
-    if args.is_img_s3_uri :
-        df = pd.read_csv('/home/seungu/Downloads/sauce filtering test - 시트1.csv')
-        filenames = df['s3_key']
-    else :
-        pass
+    # df = pd.read_csv('/home/seungu/Downloads/sauce filtering test - 시트1.csv')
+    # filenames = df['s3_key']
 
     cont_point = 0
     scale_factor = 100
 
-    food_results_list = []
-    bottom_heights = []
-    is_zeros_list = []
+    food_results_list, bottom_heights = [], []
 
     zero_uris, zero_height_percentages, image_names = [], [], []
-    # filenames = [
-    #     "s3://nuvi-data/sawoo-es/241119/L/A/sawoo-es_241119_122957_17155_L_A_10164000044A0002A_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_122720_16978_L_A_cb00cbbe143e6d68_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_033701_16877_L_A_VS-2407080010_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_041930_17329_L_A_VS-23101002_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241119/L/A/sawoo-es_241119_131759_17616_L_A_10164000044A0002A_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_131212_17228_L_A_10064008642000011_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_133054_17411_L_A_10064008642000025_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_123430_16899_L_A_10064008642000011_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_123544_16871_L_A_10064008642000011_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_122805_17063_L_A_1006400864200000B_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_034008_16938_L_A_VS-2407080010_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_122725_16956_L_A_10064008642000011_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_033329_17052_L_A_VS-23101004_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_132934_17326_L_A_10064008642000025_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241114/L/A/sawoo-es_241114_030634_17054_L_A_VS-23101004_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_034224_16936_L_A_VS-2407080010_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241119/L/A/sawoo-es_241119_124350_16842_L_A_10064008642000011_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_131112_17660_L_A_1006400864200000B_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_122951_17154_L_A_10064008642000025_Trayfile.png",
-    #     "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_034211_16941_L_A_VS-2407080010_Trayfile.png",
-    # ]
+    filenames = [
+        "s3://nuvi-data/sawoo-es/241119/L/A/sawoo-es_241119_122957_17155_L_A_10164000044A0002A_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_122720_16978_L_A_cb00cbbe143e6d68_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_033701_16877_L_A_VS-2407080010_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_041930_17329_L_A_VS-23101002_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241119/L/A/sawoo-es_241119_131759_17616_L_A_10164000044A0002A_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_131212_17228_L_A_10064008642000011_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_133054_17411_L_A_10064008642000025_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241115/L/A/sawoo-es_241115_123430_16899_L_A_10064008642000011_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_123544_16871_L_A_10064008642000011_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_122805_17063_L_A_1006400864200000B_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_034008_16938_L_A_VS-2407080010_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_122725_16956_L_A_10064008642000011_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_033329_17052_L_A_VS-23101004_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_132934_17326_L_A_10064008642000025_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241114/L/A/sawoo-es_241114_030634_17054_L_A_VS-23101004_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_034224_16936_L_A_VS-2407080010_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241119/L/A/sawoo-es_241119_124350_16842_L_A_10064008642000011_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_131112_17660_L_A_1006400864200000B_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241120/L/A/sawoo-es_241120_122951_17154_L_A_10064008642000025_Trayfile.png",
+        "s3://nuvi-data/sawoo-es/241113/L/A/sawoo-es_241113_034211_16941_L_A_VS-2407080010_Trayfile.png",
+    ]
 
     fx = args.focal_length_x / 2
     fy = args.focal_length_y / 2
@@ -109,13 +102,9 @@ def main():
         print('k :', k)
 
 
-        if args.is_img_s3_uri :
-            filename = filename.replace('s3://nuvi-data/', '')
-            filename = filename.replace('-inferenced.json', '.png')
-            image = s3_api.get_image(bucket, filename)
-        else :
-            filename = args.img_path
-            image = cv2.imread(filename)
+        filename = filename.replace('s3://nuvi-data/', '')
+        filename = filename.replace('-inferenced.json', '.png')
+        image = s3_api.get_image(bucket, filename)
 
 
         # Read the image using OpenCV
@@ -135,7 +124,6 @@ def main():
             height, width = cropped_image.shape[:2]
 
             print('Cropped image h, w:', height, width)
-
             s = time.time()
             pred = depth_anything.infer_image(cropped_image, height)
             print('crop infer time:', time.time()-s)
@@ -153,19 +141,12 @@ def main():
         food_masks, food_indices, food_masks_original = get_food_masks(results, image.shape[:2], crop_loc)
 
 
-        # ############################
         tray_top_mask, initial_point = get_tray_top_mask2(pred, tray_mask, list(food_masks.values()))
-        cropped_image_ = copy.deepcopy(cropped_image)
-        cv2.circle(cropped_image_, initial_point, radius=5, color=(0, 0, 255), thickness=-1)
-        
-        folder_name = f'_output/{args.save_name}/centers'
-        os.makedirs(folder_name, exist_ok=True)
-        cv2.imwrite(f"{folder_name}/{k}.jpg", cropped_image_)
+        save_cropped_image_with_center(args, k, cropped_image, initial_point)
+
         count_nonzero = np.count_nonzero(tray_top_mask)
 
-        folder_name = f'_output/{args.save_name}/tray_top_masks'
-        os.makedirs(folder_name, exist_ok=True)
-        cv2.imwrite(f"{folder_name}/{k}.jpg", tray_top_mask.astype(np.uint8)*255)
+        folder_name = save_tray_top_mask(args, k, tray_top_mask)
         
         if count_nonzero < 100 : 
 
@@ -175,8 +156,6 @@ def main():
                                                         list(food_masks.values()),
                                                         depth_saturate_threshold=1.3)
 
-            # tray_top_mask = np.load(f'tray_top_masks/{k}.npy')
-            # folder_name = 'output/tray_top_masks_cluster'
             os.makedirs(folder_name, exist_ok=True)
             cv2.imwrite(f"{folder_name}/{k}.jpg", tray_top_mask.astype(np.uint8)*255)
 
@@ -184,43 +163,24 @@ def main():
             folder_name = f'_output/{args.save_name}/depth_color'
             os.makedirs(folder_name, exist_ok=True)
             cv2.imwrite(f"{folder_name}/{k}.jpg", depth_uint8)
-
-        # ###########################
-        # folder_name = 'output/tray_top_masks_testset_onlycluster'
-        # os.makedirs(folder_name, exist_ok=True)
-
-        # # ## tray top 점들로 linear regression하여 평면의 방정식을 획득한다.
-        # tray_top_mask, depth_uint8 = get_tray_top_mask(pred, 
-        #                                             tray_mask, 
-        #                                             list(food_masks.values()),
-        #                                             depth_saturate_threshold=1.3)
-        # cv2.imwrite(f"output/pred_uint8/{k}.jpg", depth_uint8)
-
-        # # tray_top_mask = np.load(f'tray_top_masks/{k}.npy')
-        # # folder_name = 'output/tray_top_masks_cluster'
-        # os.makedirs(folder_name, exist_ok=True)
-        # cv2.imwrite(f"{folder_name}/{k}.jpg", tray_top_mask.astype(np.uint8)*255)
-        ###########################
+            save_img(depth_uint8, f'_output/{args.save_name}/depth_color', k)
 
         plane_params, plane_pcd, plane_area_pcd, not_plane_pcd = calc_plane_params(pred, tray_top_mask, scale_factor,
                                                                                  fx=fx, fy=fy)
 
 
-        bottom_height, depth_colored = calc_height_of_bottom_from_top(pred, plane_params, tray_mask,
+        bottom_height, depth_max_point = calc_height_of_bottom_from_top(pred, plane_params, tray_mask,
                                                         food_masks, scale_factor, fx=fx, fy=fy)
 
 
-        folder_name = f'_output/{args.save_name}/dist_max_point'
-        os.makedirs(folder_name, exist_ok=True)
-        cv2.imwrite(f'{folder_name}/{k}.jpg', depth_colored)
+        save_img(depth_max_point, f'_output/{args.save_name}/dist_max_point', k)
         
         bottom_heights.append(bottom_height)
 
         food_pcds = []
         food_results=""
-        is_zero_results = ""
-
         height_percentage_str = ""
+
         output = cv2.cvtColor(image, cv2.COLOR_BGR2BGRA)
         output[:, :, 3] = 100
         is_zero = False
@@ -236,15 +196,11 @@ def main():
 
             height_from_bottom = -(bottom_height - height)
 
-            # Convert image to 4 channels (RGBA)
-
             # Calculate height percentage
             height_percentage = -height_from_bottom / bottom_height
 
             if height_percentage < 0.3:
                 is_zero = True
-                
-                # Set the alpha channel to highlight the food mask
                 output[food_mask_original == 1, 3] = 255  # Semi-transparent for non-food areas
                 height_percentage_str += f"{results['class_names'][idx]} {height_percentage:.3f},"
 
@@ -259,17 +215,19 @@ def main():
         print('algorithm time:', time.time()-t)
 
         if is_zero:
-            folder_name = f'_output/{args.save_name}/highlighted_masks'
-            os.makedirs(folder_name, exist_ok=True)
-            cv2.imwrite(f"{folder_name}/{k}_{results['class_names'][idx]}.png", output)
+            save_img(output, f'_output/{args.save_name}/highlighted_masks', k)
+
             zero_uris.append(filename)
             zero_height_percentages.append(height_percentage_str)
             image_names.append(f"{k}_{results['class_names'][idx]}.png")
 
         food_results_list.append(food_results)
+
+        ## point cloud 저장
         folder_name = f'_output/{args.save_name}/pcds'
         os.makedirs(folder_name, exist_ok=True)
         merge_point_clouds_and_save([plane_pcd, plane_area_pcd, not_plane_pcd]+food_pcds, f'{folder_name}/{k}.ply')
+    
     # Save the results to a DataFrame and write to a CSV file
     df_results = pd.DataFrame({
         'food_heights': food_results_list,
@@ -283,10 +241,6 @@ def main():
         'food_heights_percentage': zero_height_percentages
     }) 
     df_results2.to_csv(os.path.join('_output', f'{args.save_name}/zero.csv'), index=False) 
-
-
-
-
 
 
 if __name__ == '__main__':

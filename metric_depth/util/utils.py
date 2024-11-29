@@ -434,8 +434,8 @@ def remove_food_area(tray_top_mask, food_masks):
     for food_mask in food_masks:
         tray_top_mask = tray_top_mask & (food_mask == 0)
     
-    food_area_ratio = np.sum(tray_top_mask & np.logical_or.reduce(food_masks)) / np.sum(tray_top_mask)
-    return tray_top_mask, food_area_ratio
+    # food_area_ratio = np.sum(tray_top_mask & np.logical_or.reduce(food_masks)) / np.sum(tray_top_mask)
+    return tray_top_mask, None
     
 def select_tray_top_with_center_area(tray_top_masks):
 
@@ -689,6 +689,7 @@ def calc_height_of_bottom_from_top(depth, plane_params, tray_mask, food_masks, s
         y = (y_coords[mask_indices] - H / 2) / fy * z
 
     inlier_points = statistical_outlier_removal(np.column_stack((x, y, z)))
+    # inlier_points = np.column_stack((x, y, z))
 
     distances = calc_distances_to_plane(inlier_points[:, 0], inlier_points[:, 1], inlier_points[:, 2], plane_params)
 
@@ -800,3 +801,24 @@ def get_plane_mask(depth_map, initial_point, variance_threshold):
 
     
     return mask
+
+def save_img(img, folder_name, k):
+    os.makedirs(folder_name, exist_ok=True)
+    cv2.imwrite(f'{folder_name}/{k}.png', img)
+
+
+def save_tray_top_mask(args, k, tray_top_mask):
+    folder_name = f'_output/{args.save_name}/tray_top_masks'
+    os.makedirs(folder_name, exist_ok=True)
+    cv2.imwrite(f"{folder_name}/{k}.jpg", tray_top_mask.astype(np.uint8)*255)
+    return folder_name
+
+def save_cropped_image_with_center(args, k, cropped_image, initial_point):
+    import copy
+    cropped_image_ = copy.deepcopy(cropped_image)
+    cv2.circle(cropped_image_, initial_point, radius=5, color=(0, 0, 255), thickness=-1)
+    folder_name = f'_output/{args.save_name}/centers'
+    os.makedirs(folder_name, exist_ok=True)
+    cv2.imwrite(f"{folder_name}/{k}.jpg", cropped_image_)
+
+
